@@ -2,13 +2,11 @@
 frontend/.env
 frontend/.env.production
 *.local
-.env
-.env.*
+
 !.env.example
 !.env.production.example
 
 # Python
-backend/venv/
 **/__pycache__/
 *.py[cod]
 .pytest_cache/
