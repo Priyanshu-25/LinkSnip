@@ -1,5 +1,4 @@
 # Secrets / local configuration
-backend/.env
 frontend/.env
 frontend/.env.production
 *.local
