@@ -1,3 +1,4 @@
+import os
 import time
 
 from django.core.management.base import BaseCommand
@@ -17,47 +18,95 @@ from links.models import Link
 
 
 class Command(BaseCommand):
-    help = (
-        "Process LinkSnip asynchronous click events."
-    )
+    help = "Process LinkSnip asynchronous click events."
 
     def handle(
         self,
         *args,
         **options,
     ):
-        # =================================================
-        # INITIALIZE TIMESCALEDB
-        # =================================================
+        # =========================================================
+        # TIMESCALEDB MODE
+        # =========================================================
+        #
+        # USE_TIMESCALE=true
+        #     PostgreSQL + TimescaleDB
+        #
+        # USE_TIMESCALE=false
+        #     PostgreSQL only
+        #
+        # Default:
+        #     true
+        #
+        # This keeps the existing local TimescaleDB setup working
+        # while allowing Render free deployment without TimescaleDB.
+        # =========================================================
 
-        self.stdout.write(
-            self.style.SUCCESS(
-                "Initializing TimescaleDB..."
+        use_timescale = (
+            os.getenv(
+                "USE_TIMESCALE",
+                "true",
             )
+            .strip()
+            .lower()
+            in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
         )
 
-        try:
-            ensure_timescale_schema()
+        # =========================================================
+        # INITIALIZE TIMESCALEDB WHEN ENABLED
+        # =========================================================
+
+        if use_timescale:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "TimescaleDB enabled."
+                )
+            )
 
             self.stdout.write(
                 self.style.SUCCESS(
-                    "TimescaleDB ready."
+                    "Initializing TimescaleDB..."
                 )
             )
 
-        except Exception as exc:
-            self.stderr.write(
-                self.style.ERROR(
-                    "TimescaleDB initialization failed: "
-                    f"{exc}"
+            try:
+                ensure_timescale_schema()
+
+                self.stdout.write(
+                    self.style.SUCCESS(
+                        "TimescaleDB ready."
+                    )
+                )
+
+            except Exception as exc:
+                # Do not stop the worker completely.
+                # PostgreSQL analytics can still continue.
+                self.stderr.write(
+                    self.style.WARNING(
+                        "TimescaleDB initialization failed; "
+                        "falling back to PostgreSQL analytics: "
+                        f"{exc}"
+                    )
+                )
+
+                use_timescale = False
+
+        else:
+            self.stdout.write(
+                self.style.WARNING(
+                    "TimescaleDB disabled. "
+                    "Using PostgreSQL analytics only."
                 )
             )
 
-            return
-
-        # =================================================
+        # =========================================================
         # START WORKER
-        # =================================================
+        # =========================================================
 
         self.stdout.write(
             self.style.SUCCESS(
@@ -65,9 +114,9 @@ class Command(BaseCommand):
             )
         )
 
-        # =================================================
+        # =========================================================
         # PROCESS QUEUE
-        # =================================================
+        # =========================================================
 
         while True:
             event = None
@@ -99,8 +148,10 @@ class Command(BaseCommand):
                 # =================================================
                 # GEO ENRICHMENT
                 # =================================================
+                #
                 # This happens in the background worker,
                 # not during the redirect request.
+                # =================================================
 
                 ip_address = event.get(
                     "ip_address"
@@ -113,7 +164,7 @@ class Command(BaseCommand):
                 event["country"] = (
                     geo.get(
                         "country",
-                        ""
+                        "",
                     )
                     or ""
                 )
@@ -121,17 +172,16 @@ class Command(BaseCommand):
                 event["city"] = (
                     geo.get(
                         "city",
-                        ""
+                        "",
                     )
                     or ""
                 )
 
                 # =================================================
-                # 1. EXISTING POSTGRES ANALYTICS
+                # 1. POSTGRESQL ANALYTICS
                 # =================================================
 
                 with transaction.atomic():
-
                     link = (
                         Link.objects
                         .select_for_update()
@@ -142,35 +192,28 @@ class Command(BaseCommand):
 
                     ClickEvent.objects.create(
                         link=link,
-
                         ip_address=event.get(
                             "ip_address"
                         ),
-
                         country=event.get(
                             "country",
                             "",
                         ),
-
                         city=event.get(
                             "city",
                             "",
                         ),
-
                         referrer=event.get(
                             "referrer"
                         ),
-
                         user_agent=event.get(
                             "user_agent",
                             "",
                         ),
-
                         device=event.get(
                             "device",
                             "Unknown",
                         ),
-
                         browser=event.get(
                             "browser",
                             "Unknown",
@@ -188,28 +231,40 @@ class Command(BaseCommand):
                 # =================================================
                 # 2. TIMESCALEDB ANALYTICS
                 # =================================================
+                #
+                # Only execute this when TimescaleDB is enabled
+                # and initialized successfully.
+                # =================================================
 
-                write_click_event(
-                    event
-                )
+                if use_timescale:
+                    write_click_event(
+                        event
+                    )
 
                 # =================================================
                 # SUCCESS LOG
                 # =================================================
 
-                self.stdout.write(
-                    self.style.SUCCESS(
-                        f"Processed click for link {link_id} "
-                        "→ PostgreSQL + TimescaleDB"
+                if use_timescale:
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"Processed click for link {link_id} "
+                            "→ PostgreSQL + TimescaleDB"
+                        )
                     )
-                )
+                else:
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"Processed click for link {link_id} "
+                            "→ PostgreSQL"
+                        )
+                    )
 
             # =====================================================
             # LINK NO LONGER EXISTS
             # =====================================================
 
             except Link.DoesNotExist:
-
                 self.stderr.write(
                     self.style.WARNING(
                         "Click event referenced a "
@@ -222,7 +277,6 @@ class Command(BaseCommand):
             # =====================================================
 
             except Exception as exc:
-
                 self.stderr.write(
                     self.style.ERROR(
                         f"Click worker error: {exc}"
@@ -246,7 +300,6 @@ class Command(BaseCommand):
                         )
 
                 except Exception as requeue_error:
-
                     self.stderr.write(
                         self.style.ERROR(
                             "Unable to requeue click event: "
@@ -261,9 +314,7 @@ class Command(BaseCommand):
             # =====================================================
 
             except KeyboardInterrupt:
-
                 self.stdout.write(
                     "\nLinkSnip click worker stopped."
                 )
-
                 break
