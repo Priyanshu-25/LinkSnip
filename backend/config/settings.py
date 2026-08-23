@@ -153,43 +153,118 @@ WSGI_APPLICATION = (
 # DATABASE
 # =========================================================
 
-DATABASES = {
-    "default": {
-        "ENGINE":
-            "django.db.backends.postgresql",
+# =========================================================
+# DATABASE
+# =========================================================
 
-        "NAME":
-            os.getenv(
-                "DB_NAME",
-                "linkora_db",
-            ),
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "",
+).strip()
 
-        "USER":
-            os.getenv(
-                "DB_USER",
-                "postgres",
-            ),
+if DATABASE_URL:
+    from urllib.parse import unquote, urlparse
 
-        "PASSWORD":
-            os.getenv(
-                "DB_PASSWORD",
-                "",
-            ),
+    parsed_database_url = urlparse(
+        DATABASE_URL
+    )
 
-        "HOST":
-            os.getenv(
-                "DB_HOST",
-                "localhost",
-            ),
+    database_name = (
+        parsed_database_url.path.lstrip("/")
+        or "linkora_db"
+    )
 
-        "PORT":
-            os.getenv(
-                "DB_PORT",
-                "5432",
-            ),
+    database_user = (
+        unquote(
+            parsed_database_url.username or ""
+        )
+        or "postgres"
+    )
+
+    database_password = unquote(
+        parsed_database_url.password or ""
+    )
+
+    database_host = (
+        parsed_database_url.hostname
+        or "localhost"
+    )
+
+    database_port = (
+        str(
+            parsed_database_url.port
+        )
+        if parsed_database_url.port
+        else "5432"
+    )
+
+    DATABASES = {
+        "default": {
+            "ENGINE":
+                "django.db.backends.postgresql",
+
+            "NAME":
+                database_name,
+
+            "USER":
+                database_user,
+
+            "PASSWORD":
+                database_password,
+
+            "HOST":
+                database_host,
+
+            "PORT":
+                database_port,
+
+            "OPTIONS": {
+                "sslmode": os.getenv(
+                    "DB_SSLMODE",
+                    "require",
+                ),
+            },
+        }
     }
-}
 
+else:
+    # Local development fallback.
+    DATABASES = {
+        "default": {
+            "ENGINE":
+                "django.db.backends.postgresql",
+
+            "NAME":
+                os.getenv(
+                    "DB_NAME",
+                    "linkora_db",
+                ),
+
+            "USER":
+                os.getenv(
+                    "DB_USER",
+                    "postgres",
+                ),
+
+            "PASSWORD":
+                os.getenv(
+                    "DB_PASSWORD",
+                    "",
+                ),
+
+            "HOST":
+                os.getenv(
+                    "DB_HOST",
+                    "localhost",
+                ),
+
+            "PORT":
+                os.getenv(
+                    "DB_PORT",
+                    "5432",
+                ),
+        }
+    }
 
 # =========================================================
 # PASSWORD VALIDATION
