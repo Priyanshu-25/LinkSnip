@@ -1,0 +1,76 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: linksnip-redis
+    ports:
+      - "6379:6379"
+    restart: unless-stopped
+
+  timescaledb:
+    image: timescale/timescaledb:2.29.1-pg17
+    container_name: linksnip-timescaledb
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: Rishi1234
+      POSTGRES_DB: linkora_analytics
+    ports:
+      - "5433:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redirect-1:
+    build: ./redirect_service
+    container_name: linksnip-redirect-1
+    ports:
+      - "8001:8001"
+    environment:
+      REDIS_URL: redis://host.docker.internal:6379/1
+      DATABASE_URL: postgresql://postgres:Rishi1234@host.docker.internal:5432/linkora_db
+      BACKEND_BASE_URL: http://host.docker.internal:8000
+      REDIRECT_CACHE_TTL: "300"
+      GEO_PROVIDER_URL: https://api.ipinfo.io/lite/{ip}
+      GEO_API_TOKEN: "9218ac9eb30d1d"
+    restart: unless-stopped
+
+  redirect-2:
+    build: ./redirect_service
+    container_name: linksnip-redirect-2
+    ports:
+      - "8002:8001"
+    environment:
+      REDIS_URL: redis://host.docker.internal:6379/1
+      DATABASE_URL: postgresql://postgres:Rishi1234@host.docker.internal:5432/linkora_db
+      BACKEND_BASE_URL: http://host.docker.internal:8000
+      REDIRECT_CACHE_TTL: "300"
+      GEO_PROVIDER_URL: https://api.ipinfo.io/lite/{ip}
+      GEO_API_TOKEN: "9218ac9eb30d1d"
+    restart: unless-stopped
+
+  redirect-3:
+    build: ./redirect_service
+    container_name: linksnip-redirect-3
+    ports:
+      - "8003:8001"
+    environment:
+      REDIS_URL: redis://host.docker.internal:6379/1
+      DATABASE_URL: postgresql://postgres:Rishi1234@host.docker.internal:5432/linkora_db
+      BACKEND_BASE_URL: http://host.docker.internal:8000
+      REDIRECT_CACHE_TTL: "300"
+      GEO_PROVIDER_URL: https://api.ipinfo.io/lite/{ip}
+      GEO_API_TOKEN: "9218ac9eb30d1d"
+    restart: unless-stopped
+
+  nginx:
+    build: ./nginx
+    container_name: linksnip-load-balancer
+    ports:
+      - "8080:80"
+    depends_on:
+      - redirect-1
+      - redirect-2
+      - redirect-3
+    restart: unless-stopped
+
+volumes:
+  timescale_data:
