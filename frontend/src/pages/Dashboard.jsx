@@ -29,10 +29,19 @@ function Dashboard() {
     useState(false);
 
   const [message, setMessage] =
-    useState("");
+  useState("");
 
-  const [error, setError] =
-    useState("");
+const [error, setError] =
+  useState("");
+
+const [fieldErrors, setFieldErrors] = useState({
+  url: "",
+  alias: "",
+  clickLimit: "",
+  expiresAt: "",
+  password: "",
+  redirectType: "",
+});
 
   const email =
     localStorage.getItem("user_email") ||
@@ -118,24 +127,35 @@ function Dashboard() {
     setMessage("");
     setError("");
 
+setFieldErrors({
+  url: "",
+  alias: "",
+  clickLimit: "",
+  expiresAt: "",
+  password: "",
+  redirectType: "",
+});
 
     if (!url.trim()) {
-      setError(
-        "Please enter a destination URL.",
-      );
-      return;
-    }
+  setFieldErrors((current) => ({
+    ...current,
+    url: "Please enter a destination URL.",
+  }));
+  return;
+}
 
 
-    if (
-      passwordProtected &&
-      !password.trim()
-    ) {
-      setError(
-        "Please enter a password for this protected link.",
-      );
-      return;
-    }
+   if (
+  passwordProtected &&
+  !password.trim()
+) {
+  setFieldErrors((current) => ({
+    ...current,
+    password:
+      "Please enter a password for this protected link.",
+  }));
+  return;
+}
 
 
     try {
@@ -211,30 +231,45 @@ function Dashboard() {
       setShowCreate(false);
 
     } catch (requestError) {
-      console.error(requestError);
+  console.error(requestError);
 
+  const backendError =
+    requestError.response?.data || {};
 
-      const backendError =
-        requestError.response?.data;
+  const nextFieldErrors = {
+    url:
+      backendError?.original_url?.[0] || "",
+    alias:
+      backendError?.custom_alias?.[0] || "",
+    clickLimit:
+      backendError?.click_limit?.[0] || "",
+    expiresAt:
+      backendError?.expires_at?.[0] || "",
+    password:
+      backendError?.password?.[0] || "",
+    redirectType:
+      backendError?.redirect_type?.[0] || "",
+  };
 
+  setFieldErrors(nextFieldErrors);
 
-      const errorMessage =
-        backendError?.original_url?.[0] ||
-        backendError?.custom_alias?.[0] ||
-        backendError?.click_limit?.[0] ||
-        backendError?.expires_at?.[0] ||
-        backendError?.password?.[0] ||
-        backendError?.redirect_type?.[0] ||
-        backendError?.detail ||
-        backendError?.error ||
-        "Unable to create the link.";
+  const generalError =
+    backendError?.detail ||
+    backendError?.error ||
+    "";
 
+  const hasFieldError =
+    Object.values(nextFieldErrors).some(
+      (value) => Boolean(value),
+    );
 
-      setError(
-        errorMessage,
-      );
-
-    } finally {
+  setError(
+    hasFieldError
+      ? ""
+      : generalError ||
+        "Unable to create the link.",
+  );
+}finally {
       setCreating(false);
     }
   };
@@ -450,16 +485,22 @@ function Dashboard() {
 
           <button
             className="dashboard-create-button"
-            onClick={() => {
+           onClick={() => {
+  setShowCreate(true);
+  setError("");
+  setMessage("");
 
-              setShowCreate(true);
+  setFieldErrors({
+    url: "",
+    alias: "",
+    clickLimit: "",
+    expiresAt: "",
+    password: "",
+    redirectType: "",
+  });
 
-              setError("");
-              setMessage("");
-
-              resetCreateForm();
-
-            }}
+  resetCreateForm();
+}}
           >
             <span>+</span>
             Create Smart Link
@@ -857,13 +898,21 @@ function Dashboard() {
                 placeholder=
                   "https://example.com/your-page"
                 value={url}
-                onChange={(event) =>
-                  setUrl(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+  setUrl(event.target.value);
+
+  setFieldErrors((current) => ({
+    ...current,
+    url: "",
+  }));
+}}
                 required
-              />
+              />{fieldErrors.url && (
+  <div className="field-error">
+    <span>!</span>
+    {fieldErrors.url}
+  </div>
+)}
 
 
               {/* ALIAS */}
@@ -881,14 +930,22 @@ function Dashboard() {
                 type="text"
                 placeholder="summer-sale"
                 value={alias}
-                onChange={(event) =>
-                  setAlias(
-                    event.target.value,
-                  )
-                }
+                onChange={(event) => {
+  setAlias(event.target.value);
+
+  setFieldErrors((current) => ({
+    ...current,
+    alias: "",
+  }));
+}}
               />
 
-
+{fieldErrors.alias && (
+  <div className="field-error">
+    <span>!</span>
+    {fieldErrors.alias}
+  </div>
+)}
               {/* LIMIT + EXPIRATION */}
 
               <div
@@ -912,13 +969,21 @@ function Dashboard() {
                     min="1"
                     placeholder="100"
                     value={clickLimit}
-                    onChange={(event) =>
-                      setClickLimit(
-                        event.target.value,
-                      )
-                    }
-                  />
+                   onChange={(event) => {
+  setClickLimit(event.target.value);
 
+  setFieldErrors((current) => ({
+    ...current,
+    clickLimit: "",
+  }));
+}}
+                  />
+{fieldErrors.clickLimit && (
+  <div className="field-error">
+    <span>!</span>
+    {fieldErrors.clickLimit}
+  </div>
+)}
                 </div>
 
 
@@ -942,7 +1007,12 @@ function Dashboard() {
                       )
                     }
                   />
-
+{fieldErrors.expiresAt && (
+  <div className="field-error">
+    <span>!</span>
+    {fieldErrors.expiresAt}
+  </div>
+)}
                 </div>
 
               </div>
@@ -969,11 +1039,14 @@ function Dashboard() {
 
                   <select
                     value={redirectType}
-                    onChange={(event) =>
-                      setRedirectType(
-                        event.target.value,
-                      )
-                    }
+                    onChange={(event) => {
+  setRedirectType(event.target.value);
+
+  setFieldErrors((current) => ({
+    ...current,
+    redirectType: "",
+  }));
+}}
                     style={{
                       width: "100%",
                       minHeight: "36px",
@@ -994,7 +1067,12 @@ function Dashboard() {
                       301 Permanent
                     </option>
                   </select>
-
+{fieldErrors.redirectType && (
+  <div className="field-error">
+    <span>!</span>
+    {fieldErrors.redirectType}
+  </div>
+)}
                 </div>
 
                 <div

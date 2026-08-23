@@ -587,16 +587,41 @@ function MyLinks() {
       const backendError =
         requestError.response?.data;
 
-      const message =
-        backendError?.original_url?.[0] ||
-        backendError?.custom_alias?.[0] ||
-        backendError?.click_limit?.[0] ||
-        backendError?.expires_at?.[0] ||
-        backendError?.password?.[0] ||
-        backendError?.detail ||
-        "Unable to update the link.";
+      const nextFieldErrors = {
+  url:
+    backendError?.original_url?.[0] || "",
+  alias:
+    backendError?.custom_alias?.[0] || "",
+  clickLimit:
+    backendError?.click_limit?.[0] || "",
+  expiresAt:
+    backendError?.expires_at?.[0] || "",
+  password:
+    backendError?.password?.[0] || "",
+  redirectType:
+    backendError?.redirect_type?.[0] || "",
+};
 
-      setError(message);
+setFieldErrors(nextFieldErrors);
+
+const generalError =
+  backendError?.detail ||
+  backendError?.error ||
+  "";
+
+setError(
+  generalError ||
+    (
+      !nextFieldErrors.url &&
+      !nextFieldErrors.alias &&
+      !nextFieldErrors.clickLimit &&
+      !nextFieldErrors.expiresAt &&
+      !nextFieldErrors.password &&
+      !nextFieldErrors.redirectType
+    )
+      ? "Unable to create the link."
+      : "",
+);
 
     } finally {
       setSavingEdit(false);
