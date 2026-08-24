@@ -438,6 +438,14 @@ TIMESCALE_DATABASE_URL = os.getenv(
     "postgresql://postgres:Rishi1234@127.0.0.1:5433/linkora_analytics",
 )
 
+USE_TIMESCALE = (
+    os.getenv(
+        "USE_TIMESCALE",
+        "true",
+    ).strip().lower()
+    == "true"
+)
+
 
 # =========================================================
 # GEOLOCATION
