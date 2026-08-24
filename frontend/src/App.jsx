@@ -1,5 +1,7 @@
 import { useState } from "react";
 
+import { QRCodeCanvas } from "qrcode.react";
+
 import {
   BrowserRouter,
   Link,
@@ -37,6 +39,7 @@ function LandingPage() {
   const [url, setUrl] = useState("");
   const [message, setMessage] = useState("");
   const [shortLink, setShortLink] = useState("");
+  const [linkType, setLinkType] = useState("smart");
   const [loading, setLoading] = useState(false);
 
 
@@ -286,7 +289,10 @@ function LandingPage() {
 
             <select
               className="link-type-select"
-              defaultValue="smart"
+              value={linkType}
+              onChange={(event) =>
+                setLinkType(event.target.value)
+              }
             >
 
               <option value="smart">
@@ -333,9 +339,18 @@ function LandingPage() {
 
 
           {shortLink && (
-            <div className="result-card">
+            <div
+              className="result-card"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "20px",
+                flexWrap: "wrap",
+              }}
+            >
 
-              <div>
+              <div style={{ flex: "1 1 280px", minWidth: 0 }}>
 
                 <span>
                   Your Linkora link
@@ -345,18 +360,77 @@ function LandingPage() {
                   href={shortLink}
                   target="_blank"
                   rel="noreferrer"
+                  style={{
+                    display: "block",
+                    wordBreak: "break-all",
+                  }}
                 >
                   {shortLink}
                 </a>
 
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    marginTop: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={copyLink}
+                  >
+                    Copy
+                  </button>
+
+                  <a
+                    href={shortLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{
+                      textDecoration: "none",
+                    }}
+                  >
+                    Open link
+                  </a>
+                </div>
+
               </div>
 
-              <button
-                type="button"
-                onClick={copyLink}
-              >
-                Copy
-              </button>
+              {linkType === "qr" && (
+                <div
+                  style={{
+                    flex: "0 0 auto",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px",
+                    background: "#ffffff",
+                    border: "1px solid #e2e8f0",
+                    borderRadius: "14px",
+                  }}
+                >
+                  <QRCodeCanvas
+                    value={shortLink}
+                    size={150}
+                    bgColor="#ffffff"
+                    fgColor="#0f172a"
+                    level="H"
+                    includeMargin
+                  />
+
+                  <span
+                    style={{
+                      fontSize: "11px",
+                      color: "#64748b",
+                      fontWeight: 600,
+                    }}
+                  >
+                    Scan to open
+                  </span>
+                </div>
+              )}
 
             </div>
           )}
