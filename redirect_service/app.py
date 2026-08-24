@@ -180,13 +180,38 @@ def get_link_from_database(
 def get_link(
     short_code,
 ):
+    """
+    Load a short link.
+
+    Links with expiry or click limits are always read from
+    PostgreSQL because click_count and expiry are dynamic.
+
+    Unrestricted links continue to use Redis caching.
+    """
+
     cached = get_cached(
         short_code
     )
 
     if cached is not None:
+
+        # Dynamic links must not use stale cached values.
+        if (
+            cached.get("click_limit") is not None
+            or cached.get("expires_at")
+        ):
+            link = get_link_from_database(
+                short_code
+            )
+
+            if link is None:
+                return None, False
+
+            return link, False
+
         return cached, True
 
+    # Cache miss.
     link = get_link_from_database(
         short_code
     )
@@ -194,10 +219,15 @@ def get_link(
     if link is None:
         return None, False
 
-    set_cached(
-        short_code,
-        link,
-    )
+    # Cache only unrestricted links.
+    if (
+        link.get("click_limit") is None
+        and not link.get("expires_at")
+    ):
+        set_cached(
+            short_code,
+            link
+        )
 
     return link, False
 
@@ -557,25 +587,34 @@ def redirect_link(
             "This link is currently unavailable."
         )
 
-    expires_at = link[
+    expires_at = link.get(
         "expires_at"
-    ]
+    )
 
     if expires_at:
-        if (
-            expires_at.tzinfo is None
-        ):
-            expires_at = expires_at.replace(
-                tzinfo=timezone.utc
-            )
+        # Redis serializes datetime values as strings.
+        # Normalize the value before comparing it.
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.fromisoformat(
+                    expires_at
+                )
+            except ValueError:
+                expires_at = None
 
-        if (
-            datetime.now(timezone.utc)
-            >= expires_at
-        ):
-            return unavailable_page(
-                "This link has expired."
-            )
+        if expires_at:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(
+                    tzinfo=timezone.utc
+                )
+
+            if (
+                datetime.now(timezone.utc)
+                >= expires_at
+            ):
+                return unavailable_page(
+                    "This link has expired."
+                )
 
     click_limit = link[
         "click_limit"
