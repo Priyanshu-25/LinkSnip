@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import api from "../services/api";
@@ -16,6 +16,8 @@ function MyLinks() {
 
   const [selectedIds, setSelectedIds] = useState([]);
   const [bulkWorking, setBulkWorking] = useState(false);
+
+  const bulkImportInputRef = useRef(null);
 
   const [editingLink, setEditingLink] = useState(null);
 
@@ -56,6 +58,86 @@ function MyLinks() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBulkImport = async (event) => {
+    const file = event.target.files?.[0];
+
+    // Allow the same file to be selected again after an attempt.
+    event.target.value = "";
+
+    if (!file) {
+      return;
+    }
+
+    setMessage("");
+    setError("");
+
+    // The file picker is intentionally not restricted to .csv so that
+    // Windows does not hide files because of an extension/display issue.
+    // We still enforce the CSV requirement here.
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setError("Please select a CSV file.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await api.post(
+        "/links/bulk-import/",
+        formData,
+      );
+
+      const data = response.data || {};
+      const created = Number(data.created || 0);
+      const failed = Number(data.failed || 0);
+
+      if (failed > 0) {
+        setMessage(
+          `${created} link${created === 1 ? "" : "s"} imported successfully. ` +
+            `${failed} row${failed === 1 ? "" : "s"} failed.`,
+        );
+      } else {
+        setMessage(
+          `${created} link${created === 1 ? "" : "s"} imported successfully.`,
+        );
+      }
+
+      await loadLinks();
+    } catch (requestError) {
+      console.error("Bulk CSV import failed:", requestError);
+
+      const backendError = requestError.response?.data || {};
+
+      // Your backend returns row-level details in `results`.
+      if (Array.isArray(backendError.results)) {
+        const failedRows = backendError.results
+          .filter((item) => item.status === "error")
+          .map(
+            (item) =>
+              `Row ${item.row}: ${item.message || "Invalid row."}`,
+          );
+
+        if (failedRows.length > 0) {
+          setError(failedRows.join(" | "));
+        } else if (backendError.detail) {
+          setError(String(backendError.detail));
+        } else {
+          setError("Unable to import the CSV file.");
+        }
+
+        return;
+      }
+
+      if (backendError.detail) {
+        setError(String(backendError.detail));
+        return;
+      }
+
+      setError("Unable to import the CSV file.");
     }
   };
 
@@ -463,6 +545,13 @@ function MyLinks() {
 
       </aside>
 
+      <input
+        ref={bulkImportInputRef}
+        type="file"
+        accept="*/*"
+        onChange={handleBulkImport}
+        style={{ display: "none" }}
+      />
 
       <main className="dashboard-main">
 
@@ -481,15 +570,36 @@ function MyLinks() {
             </p>
           </div>
 
-          <button
-            className="dashboard-create-button"
-            onClick={() =>
-              navigate("/")
-            }
+          <div
+            style={{
+              display: "flex",
+              gap: "12px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
           >
-            <span>+</span>
-            Create Smart Link
-          </button>
+            <button
+              type="button"
+              className="dashboard-create-button"
+              onClick={() =>
+                bulkImportInputRef.current?.click()
+              }
+            >
+              <span>↥</span>
+              Bulk CSV Import
+            </button>
+
+            <button
+              type="button"
+              className="dashboard-create-button"
+              onClick={() =>
+                navigate("/")
+              }
+            >
+              <span>+</span>
+              Create Smart Link
+            </button>
+          </div>
 
         </header>
 

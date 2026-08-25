@@ -7,12 +7,8 @@ const API_BASE_URL = (
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  headers: {
-    "Content-Type": "application/json",
-  },
   timeout: 15000,
 });
-
 
 // =========================================================
 // REQUEST INTERCEPTOR
@@ -20,16 +16,82 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem(
-      "access_token",
-    );
+    const token =
+      localStorage.getItem("access_token");
+
+    // -----------------------------------------------------
+    // AUTHORIZATION
+    // -----------------------------------------------------
 
     if (token) {
       config.headers =
         config.headers || {};
 
-      config.headers.Authorization =
-        `Bearer ${token}`;
+      if (
+        typeof config.headers.set === "function"
+      ) {
+        config.headers.set(
+          "Authorization",
+          `Bearer ${token}`,
+        );
+      } else {
+        config.headers.Authorization =
+          `Bearer ${token}`;
+      }
+    }
+
+    // -----------------------------------------------------
+    // CONTENT TYPE
+    // -----------------------------------------------------
+    //
+    // IMPORTANT:
+    // FormData requests MUST NOT have a manually
+    // assigned Content-Type.
+    //
+    // The browser will automatically generate:
+    //
+    // multipart/form-data; boundary=...
+    //
+    // For normal JSON requests we explicitly use:
+    //
+    // application/json
+    // -----------------------------------------------------
+
+    const isFormData =
+      typeof FormData !== "undefined" &&
+      config.data instanceof FormData;
+
+    if (isFormData) {
+      if (
+        typeof config.headers.delete ===
+        "function"
+      ) {
+        config.headers.delete(
+          "Content-Type",
+        );
+      } else {
+        delete config.headers[
+          "Content-Type"
+        ];
+
+        delete config.headers[
+          "content-type"
+        ];
+      }
+    } else {
+      if (
+        typeof config.headers.set ===
+        "function"
+      ) {
+        config.headers.set(
+          "Content-Type",
+          "application/json",
+        );
+      } else {
+        config.headers[
+          "Content-Type"
+        ] = "application/json";
+      }
     }
 
     return config;
@@ -38,7 +100,6 @@ api.interceptors.request.use(
     return Promise.reject(error);
   },
 );
-
 
 // =========================================================
 // RESPONSE INTERCEPTOR
@@ -66,7 +127,7 @@ api.interceptors.response.use(
     );
 
     // -----------------------------------------------------
-    // Only attempt refresh once.
+    // TOKEN REFRESH
     // -----------------------------------------------------
 
     if (
@@ -93,6 +154,10 @@ api.interceptors.response.use(
         );
 
         localStorage.removeItem(
+          "refresh_token",
+        );
+
+        localStorage.removeItem(
           "user_email",
         );
 
@@ -100,6 +165,10 @@ api.interceptors.response.use(
       }
 
       try {
+        // -------------------------------------------------
+        // PREVENT MULTIPLE REFRESH REQUESTS
+        // -------------------------------------------------
+
         if (!refreshPromise) {
           refreshPromise = axios.post(
             `${API_BASE_URL}/auth/token/refresh/`,
@@ -138,13 +207,50 @@ api.interceptors.response.use(
         originalRequest.headers =
           originalRequest.headers || {};
 
-        originalRequest.headers.Authorization =
-          `Bearer ${newAccessToken}`;
+        if (
+          typeof originalRequest.headers
+            .set === "function"
+        ) {
+          originalRequest.headers.set(
+            "Authorization",
+            `Bearer ${newAccessToken}`,
+          );
+        } else {
+          originalRequest.headers.Authorization =
+            `Bearer ${newAccessToken}`;
+        }
+
+        // -------------------------------------------------
+        // IMPORTANT FOR FORMDATA RETRY
+        // -------------------------------------------------
+
+        const isFormData =
+          typeof FormData !== "undefined" &&
+          originalRequest.data instanceof
+            FormData;
+
+        if (isFormData) {
+          if (
+            typeof originalRequest.headers
+              .delete === "function"
+          ) {
+            originalRequest.headers.delete(
+              "Content-Type",
+            );
+          } else {
+            delete originalRequest.headers[
+              "Content-Type"
+            ];
+
+            delete originalRequest.headers[
+              "content-type"
+            ];
+          }
+        }
 
         return api(
           originalRequest,
         );
-
       } catch (refreshError) {
         refreshPromise = null;
 
@@ -176,7 +282,6 @@ api.interceptors.response.use(
   },
 );
 
-
 // =========================================================
 // PUBLIC SHORT LINK CREATION
 // =========================================================
@@ -187,8 +292,7 @@ export const createShortLink = async (
   const response = await axios.post(
     `${API_BASE_URL}/links/`,
     {
-      original_url:
-        originalUrl,
+      original_url: originalUrl,
     },
     {
       headers: {
@@ -201,7 +305,6 @@ export const createShortLink = async (
 
   return response.data;
 };
-
 
 // =========================================================
 // DEFAULT API

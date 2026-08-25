@@ -360,11 +360,27 @@ class LinkBulkImportView(
 
         try:
             raw = uploaded_file.read()
-            decoded = raw.decode("utf-8-sig")
+
+            # Support common CSV encodings produced by
+            # Excel, Google Sheets, and other spreadsheet apps.
+            #
+            # UTF-8 is preferred, but UTF-16 and Windows-1252
+            # are also supported as fallbacks.
+            if raw.startswith(b"\xff\xfe") or raw.startswith(b"\xfe\xff"):
+                decoded = raw.decode("utf-16")
+            else:
+                try:
+                    decoded = raw.decode("utf-8-sig")
+                except UnicodeDecodeError:
+                    decoded = raw.decode("cp1252")
+
         except UnicodeDecodeError:
             return Response(
                 {
-                    "detail": "CSV must use UTF-8 encoding."
+                    "detail": (
+                        "Unable to decode the CSV file. "
+                        "Please save it as CSV UTF-8."
+                    )
                 },
                 status=400,
             )
